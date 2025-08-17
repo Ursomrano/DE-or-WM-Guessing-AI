@@ -23,12 +23,12 @@ class DEWM_Guesser(nn.Module):
         lin_relu_stk = self.linear_relu_stack(image)
         return lin_relu_stk
 
-    def train_model(self, training_data, device):
+    def train_model(self, training_data, device, epochs):
         self.to(device)
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(self.parameters(), 1e-3)
 
-        for epoch in range(10):
+        for epoch in range(epochs):
             for images, class_labels in training_data:
                 images = images.to(device)
                 class_labels = class_labels.to(device)
@@ -40,7 +40,7 @@ class DEWM_Guesser(nn.Module):
                 loss.backward()
                 optimizer.step()
 
-            print(f"Epoch {epoch+1}/5, Loss: {loss.item():.4f}")
+            print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item():.4f}")
 
     def predict(self, images, device):
         self.to(device)
@@ -51,11 +51,14 @@ class DEWM_Guesser(nn.Module):
             outputs = self(images)
             pred = outputs.argmax(1)
         
-        return pred.item()
+        if pred.shape[0] == 1:
+            return pred.item()
+        else:
+            return pred.cpu().tolist()
 
 class Data_Giver():
     @staticmethod
-    def get(directory):
+    def get(directory, batch_size):
         transform = transforms.Compose([
             transforms.Resize((480,640)),
             transforms.Grayscale(),
@@ -64,7 +67,7 @@ class Data_Giver():
 
         training_data = datasets.ImageFolder(directory, transform=transform)
 
-        loader = DataLoader(training_data, batch_size=1, shuffle=True)
+        loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
         return loader
     
@@ -86,13 +89,15 @@ class Data_Giver():
     
 def main():
     directory = input("What directory shall I use as training data:\n")
+    epochs = int(input("How many Epochs (iterations of training) do you wish for me to train myself with?:\n "))
+    batch_size = int(input("How big would you like my training batches (how many images I process at once) to be?:\n"))
     
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = DEWM_Guesser().to(device)
 
-    training_data = Data_Giver().get(directory)
+    training_data = Data_Giver().get(directory, batch_size)
 
-    model.train_model(training_data, device)
+    model.train_model(training_data, device,epochs)
 
     pred_index = model.predict(Data_Giver().get_img_from_user(), device)
     pred_name = training_data.dataset.classes[pred_index]
